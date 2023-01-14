@@ -1,0 +1,20 @@
+[package]
+name = "composite_joystick"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.68"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.0.32", features = ["derive"] }
+hex = "0.4.3"
+itertools = "0.10.5"
+evdev-rs = { version = "0.6.1", features = ["serde"] }
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+xdg = "2.4.1"
+crossbeam-channel = "0.5.6"
+static_assertions = "1.1.0"
