@@ -1,5 +1,5 @@
-use evdev_rs::enums::EventCode;
-use evdev_rs::enums::EV_ABS;
+use evdev_rs::enums::{EventCode, EV_ABS, EV_SYN};
+use evdev_rs::InputEvent;
 use std::collections::HashMap;
 
 use thiserror::Error;
@@ -25,15 +25,6 @@ pub struct InputAxisId {
     pub axis: EventCode,
 }
 
-impl InputAxisId {
-    pub fn new(js_id: u16, axis: EventCode) -> Self {
-        Self {
-            axis: axis,
-            joystick: JoystickId(js_id),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct InputAxis {
     pub id: InputAxisId,
@@ -41,19 +32,8 @@ pub struct InputAxis {
     pub upper_bound: i64,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
-pub struct OutputAxisId {
-    axis_number: u16,
-}
-
-impl OutputAxisId {
-    pub fn new(axis_number: u16) -> Self {
-        Self { axis_number }
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AxisState(pub Option<i64>);
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+pub struct OutputAxisId(pub u16);
 
 #[derive(Debug)]
 struct OutputAxis {
@@ -62,25 +42,40 @@ struct OutputAxis {
     combine_fn: AxisCombineFn,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct AxisUpdate {
-    pub axis: InputAxisId,
-    pub state: AxisState,
+#[derive(Debug)]
+pub struct JoystickMux {
+    axis_states: HashMap<InputAxisId, InputEvent>,
+    axes: HashMap<OutputAxisId, OutputAxis>,
+    output_s: Option<crossbeam_channel::Sender<OutputState>>,
 }
 
 #[derive(Debug)]
-pub struct JoystickMux {
-    axis_states: HashMap<InputAxisId, AxisState>,
-    axes: HashMap<OutputAxisId, OutputAxis>,
-    update: Option<crossbeam_channel::Sender<AxisState>>,
+pub struct AxisUpdate {
+    pub joystick: JoystickId,
+    pub event: InputEvent,
+}
+
+#[derive(Debug)]
+pub struct OutputState {
+    axes: Vec<(OutputAxisId, i64)>,
+}
+
+impl PartialEq for OutputState {
+    fn eq(&self, other: &Self) -> bool {
+        let mut self_axes = self.axes.clone();
+        let mut other_axes = other.axes.clone();
+        self_axes.sort();
+        other_axes.sort();
+        self_axes == other_axes
+    }
 }
 
 impl JoystickMux {
-    pub fn new(update: Option<crossbeam_channel::Sender<()>>) -> Self {
+    pub fn new(output_s: Option<crossbeam_channel::Sender<OutputState>>) -> Self {
         Self {
             axis_states: HashMap::new(),
             axes: HashMap::new(),
-            update: update,
+            output_s,
         }
     }
 
@@ -101,33 +96,65 @@ impl JoystickMux {
     }
 
     pub fn update(&mut self, update: AxisUpdate) {
-        self.axis_states.insert(update.axis, update.state);
+        match update.event.event_code {
+            EventCode::EV_SYN(_) => self.send_output(),
+            code => {
+                self.axis_states.insert(
+                    InputAxisId {
+                        joystick: update.joystick,
+                        axis: code,
+                    },
+                    update.event,
+                );
+            }
+        }
     }
 
-    pub fn output(&mut self, axis_id: OutputAxisId) -> AxisState {
+    pub fn output_axis(&self, axis_id: OutputAxisId) -> Option<i64> {
         match self.axes.get(&axis_id) {
             Some(output_axis) => match output_axis.combine_fn {
                 AxisCombineFn::LargestMagnitude => output_axis
                     .inputs
                     .iter()
-                    .filter_map(|input| match self.axis_states.get(&input.id) {
-                        Some(ax) => Some((input, ax)),
-                        None => None,
-                    })
-                    .map(|(input, state)| match state {
-                        AxisState(Some(v)) => {
+                    .map(|input| match self.axis_states.get(&input.id) {
+                        Some(code) => {
                             OUTPUT_LOWER_BOUND
-                                + ((v - input.lower_bound)
+                                + ((i64::from(code.value) - input.lower_bound)
                                     * (OUTPUT_UPPER_BOUND - OUTPUT_LOWER_BOUND)
                                     / (input.upper_bound - input.lower_bound))
                         }
-                        AxisState(None) => 0,
+                        None => 0,
                     })
                     .max_by_key(|value| value.abs())
-                    .map_or(AxisState(None), |state| AxisState(Some(state))),
-                AxisCombineFn::Hat { x: _, y: _ } => AxisState(None),
+                    .map_or(None, |state| Some(state)),
+                // TODO: implement hats
+                AxisCombineFn::Hat { x: _, y: _ } => None,
             },
-            None => AxisState(None),
+            None => None,
+        }
+    }
+
+    pub fn output(&self) -> OutputState {
+        OutputState {
+            axes: self
+                .axes
+                .iter()
+                .map(|(_, axis)| {
+                    (
+                        axis.output,
+                        match self.output_axis(axis.output) {
+                            Some(s) => s,
+                            None => 0,
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub fn send_output(&mut self) {
+        if let Some(sender) = &self.output_s {
+            sender.send(self.output()).expect("Failed to send state");
         }
     }
 }
@@ -140,36 +167,52 @@ mod tests {
     fn test_inputless_axis() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [].into_iter(),
             AxisCombineFn::LargestMagnitude,
         );
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(None));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 0)],
+            }
+        );
     }
 
     #[test]
     fn test_axis_with_no_data() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [InputAxis {
-                id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
+                id: InputAxisId {
+                    joystick: JoystickId(0),
+                    axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                },
                 lower_bound: -32767,
                 upper_bound: 32767,
             }]
             .into_iter(),
             AxisCombineFn::LargestMagnitude,
         );
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(None));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 0)],
+            }
+        );
     }
 
     #[test]
     fn test_axis_with_some_data() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [InputAxis {
-                id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
+                id: InputAxisId {
+                    joystick: JoystickId(0),
+                    axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                },
                 lower_bound: -32767,
                 upper_bound: 32767,
             }]
@@ -177,25 +220,40 @@ mod tests {
             AxisCombineFn::LargestMagnitude,
         );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(5)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 5,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(5)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 5)],
+            }
+        );
     }
 
     #[test]
     fn test_largest_magnitude() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [
                 InputAxis {
-                    id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                    },
                     lower_bound: -32767,
                     upper_bound: 32767,
                 },
                 InputAxis {
-                    id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_Y)),
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_Y),
+                    },
                     lower_bound: -32767,
                     upper_bound: 32767,
                 },
@@ -204,29 +262,49 @@ mod tests {
             AxisCombineFn::LargestMagnitude,
         );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(5)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 5,
+            },
         });
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_Y)),
-            state: AxisState(Some(12)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_Y),
+                value: 12,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(12)));
+
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 12)],
+            }
+        );
     }
 
     #[test]
     fn test_negative_magnitude() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [
                 InputAxis {
-                    id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                    },
                     lower_bound: -32767,
                     upper_bound: 32767,
                 },
                 InputAxis {
-                    id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_Y)),
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_Y),
+                    },
                     lower_bound: -32767,
                     upper_bound: 32767,
                 },
@@ -235,54 +313,39 @@ mod tests {
             AxisCombineFn::LargestMagnitude,
         );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(5)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 5,
+            },
         });
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_Y)),
-            state: AxisState(Some(-12)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_Y),
+                value: -12,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(-12)));
-    }
-
-    #[test]
-    fn test_none_magnitude() {
-        let mut m = JoystickMux::new(None);
-        m.configure_axis(
-            OutputAxisId::new(1),
-            [
-                InputAxis {
-                    id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-                    lower_bound: -32767,
-                    upper_bound: 32767,
-                },
-                InputAxis {
-                    id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_Y)),
-                    lower_bound: -32767,
-                    upper_bound: 32767,
-                },
-            ]
-            .into_iter(),
-            AxisCombineFn::LargestMagnitude,
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), -12)],
+            }
         );
-        m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(5)),
-        });
-        m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_Y)),
-            state: AxisState(None),
-        });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(5)));
     }
 
     #[test]
     fn test_input_range() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [InputAxis {
-                id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
+                id: InputAxisId {
+                    joystick: JoystickId(0),
+                    axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                },
                 lower_bound: -5,
                 upper_bound: 5,
             }]
@@ -290,38 +353,87 @@ mod tests {
             AxisCombineFn::LargestMagnitude,
         );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(0)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 0,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(0)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 0)],
+            }
+        );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(5)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 5,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(32767)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 32767)],
+            }
+        );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(-5)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: -5,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(-32767)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), -32767)],
+            }
+        );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(1)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 1,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(6553)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 6553)],
+            }
+        );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(-1)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: -1,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(-6554)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), -6554)],
+            }
+        );
     }
+
     #[test]
     fn test_inverted_input_range() {
         let mut m = JoystickMux::new(None);
         m.configure_axis(
-            OutputAxisId::new(1),
+            OutputAxisId(1),
             [InputAxis {
-                id: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
+                id: InputAxisId {
+                    joystick: JoystickId(0),
+                    axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                },
                 lower_bound: 5,
                 upper_bound: -5,
             }]
@@ -329,19 +441,32 @@ mod tests {
             AxisCombineFn::LargestMagnitude,
         );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(0)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 5,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(0)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), -32767)],
+            }
+        );
         m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(5)),
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: evdev_rs::TimeVal::new(0, 0),
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: -5,
+            },
         });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(-32767)));
-        m.update(AxisUpdate {
-            axis: InputAxisId::new(0, EventCode::EV_ABS(EV_ABS::ABS_X)),
-            state: AxisState(Some(-5)),
-        });
-        assert_eq!(m.output(OutputAxisId::new(1)), AxisState(Some(32767)));
+        assert_eq!(
+            m.output(),
+            OutputState {
+                axes: vec![(OutputAxisId(1), 32767)],
+            }
+        );
     }
 }
