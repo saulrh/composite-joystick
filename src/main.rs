@@ -2,18 +2,15 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use crossbeam_channel::select;
-use evdev_rs::enums::{EventCode, EV_ABS, EV_REL, EV_SYN};
+use evdev_rs::enums::{EventCode, EV_ABS, EV_KEY, EV_REL};
 use evdev_rs::DeviceWrapper;
 use std::collections::HashMap;
-use std::fs;
-use std::io;
 use std::thread;
 
 mod gadget;
 mod joystick_mux;
 
-use joystick_mux::{AxisCombineFn, AxisUpdate, InputAxisId, JoystickId, OutputAxisId};
+use joystick_mux::{AxisCombineFn, AxisUpdate, InputAxis, InputAxisId, JoystickId, OutputAxisId};
 
 #[derive(clap::Parser)]
 struct Args {
@@ -28,24 +25,43 @@ enum Command {
     Run,
 }
 
-fn get_input_axes(
-    device: &evdev_rs::Device,
-    id: u16,
-) -> HashMap<EventCode, joystick_mux::InputAxis> {
+fn lower_bound_for(code: EventCode) -> i64 {
+    match code {
+        EventCode::EV_ABS(_) => -1000,
+        EventCode::EV_REL(_) => -1000,
+        EventCode::EV_KEY(_) => 0,
+        _ => -1000,
+    }
+}
+
+fn upper_bound_for(code: EventCode) -> i64 {
+    match code {
+        EventCode::EV_ABS(_) => 1000,
+        EventCode::EV_REL(_) => 1000,
+        EventCode::EV_KEY(_) => 1,
+        _ => 1000,
+    }
+}
+
+fn get_input_axes(device: &evdev_rs::Device, id: u16) -> HashMap<EventCode, InputAxis> {
     let mut result = HashMap::new();
-    let iterator = itertools::chain(
-        evdev_rs::EventCodeIterator::new(&evdev_rs::enums::EventType::EV_ABS),
-        evdev_rs::EventCodeIterator::new(&evdev_rs::enums::EventType::EV_REL),
-    );
+    let iterator = evdev_rs::EventCodeIterator::new(&evdev_rs::enums::EventType::EV_ABS)
+        .chain(evdev_rs::EventCodeIterator::new(
+            &evdev_rs::enums::EventType::EV_REL,
+        ))
+        .chain(evdev_rs::EventCodeIterator::new(
+            &evdev_rs::enums::EventType::EV_KEY,
+        ));
     for code in iterator {
+        let id = InputAxisId {
+            joystick: joystick_mux::JoystickId(id),
+            axis: code,
+        };
         if let Some(ai) = device.abs_info(&code) {
             result.insert(
                 code,
-                joystick_mux::InputAxis {
-                    id: joystick_mux::InputAxisId {
-                        joystick: joystick_mux::JoystickId(id),
-                        axis: code,
-                    },
+                InputAxis {
+                    id,
                     lower_bound: ai.minimum.into(),
                     upper_bound: ai.maximum.into(),
                 },
@@ -53,13 +69,10 @@ fn get_input_axes(
         } else if device.has(code) {
             result.insert(
                 code,
-                joystick_mux::InputAxis {
-                    id: joystick_mux::InputAxisId {
-                        joystick: joystick_mux::JoystickId(id),
-                        axis: code,
-                    },
-                    lower_bound: -1000,
-                    upper_bound: 1000,
+                InputAxis {
+                    id,
+                    lower_bound: lower_bound_for(code),
+                    upper_bound: upper_bound_for(code),
                 },
             );
         }
@@ -112,64 +125,91 @@ fn run() -> Result<()> {
     let mut mux = joystick_mux::JoystickMux::new(Some(output_s));
     mux.configure_axis(
         // Yaw
-        OutputAxisId(0),
-        [
-            js_axes[&EventCode::EV_ABS(EV_ABS::ABS_X)],
-            sp_axes[&EventCode::EV_REL(EV_REL::REL_RY)],
-        ]
-        .into_iter(),
-        AxisCombineFn::LargestMagnitude,
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RZ)),
+        AxisCombineFn::LargestMagnitude {
+            inputs: vec![
+                js_axes[&EventCode::EV_ABS(EV_ABS::ABS_X)],
+                sp_axes[&EventCode::EV_REL(EV_REL::REL_RZ)],
+            ],
+        },
     );
     mux.configure_axis(
         // Pitch
-        OutputAxisId(1),
-        [
-            js_axes[&EventCode::EV_ABS(EV_ABS::ABS_Y)],
-            sp_axes[&EventCode::EV_REL(EV_REL::REL_RX)],
-        ]
-        .into_iter(),
-        AxisCombineFn::LargestMagnitude,
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RX)),
+        AxisCombineFn::LargestMagnitude {
+            inputs: vec![
+                js_axes[&EventCode::EV_ABS(EV_ABS::ABS_Y)],
+                sp_axes[&EventCode::EV_REL(EV_REL::REL_RX)],
+            ],
+        },
     );
     mux.configure_axis(
         // Roll
-        OutputAxisId(2),
-        // stick RZ, spacemouse RY, throttle n/a
-        [
-            js_axes[&EventCode::EV_ABS(EV_ABS::ABS_RZ)],
-            sp_axes[&EventCode::EV_REL(EV_REL::REL_RY)],
-        ]
-        .into_iter(),
-        AxisCombineFn::LargestMagnitude,
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RY)),
+        AxisCombineFn::LargestMagnitude {
+            inputs: vec![
+                js_axes[&EventCode::EV_ABS(EV_ABS::ABS_RZ)],
+                sp_axes[&EventCode::EV_REL(EV_REL::REL_RY)],
+            ],
+        },
     );
     mux.configure_axis(
         // Throttle/translate f/b
-        OutputAxisId(3),
-        [
-            sp_axes[&EventCode::EV_REL(EV_REL::REL_Y)],
-            th_axes[&EventCode::EV_ABS(EV_ABS::ABS_THROTTLE)],
-        ]
-        .into_iter(),
-        AxisCombineFn::LargestMagnitude,
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_Y)),
+        AxisCombineFn::LargestMagnitude {
+            inputs: vec![
+                sp_axes[&EventCode::EV_REL(EV_REL::REL_Y)],
+                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_THROTTLE)],
+            ],
+        },
     );
     mux.configure_axis(
         // translate l/r
-        OutputAxisId(4),
-        [
-            sp_axes[&EventCode::EV_REL(EV_REL::REL_X)],
-            th_axes[&EventCode::EV_ABS(EV_ABS::ABS_X)],
-        ]
-        .into_iter(),
-        AxisCombineFn::LargestMagnitude,
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)),
+        AxisCombineFn::LargestMagnitude {
+            inputs: vec![
+                sp_axes[&EventCode::EV_REL(EV_REL::REL_X)],
+                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_X)],
+            ],
+        },
     );
     mux.configure_axis(
         // translate u/d
-        OutputAxisId(5),
-        [
-            sp_axes[&EventCode::EV_REL(EV_REL::REL_Z)],
-            th_axes[&EventCode::EV_ABS(EV_ABS::ABS_Y)],
-        ]
-        .into_iter(),
-        AxisCombineFn::LargestMagnitude,
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_Z)),
+        AxisCombineFn::LargestMagnitude {
+            inputs: vec![
+                sp_axes[&EventCode::EV_REL(EV_REL::REL_Z)],
+                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_Y)],
+            ],
+        },
+    );
+    mux.configure_axis(
+        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)),
+        AxisCombineFn::LargestMagnitude {
+            // JS trigger
+            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)]],
+        },
+    );
+    mux.configure_axis(
+        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_THUMB)),
+        AxisCombineFn::LargestMagnitude {
+            // JS thumb
+            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_THUMB)]],
+        },
+    );
+    mux.configure_axis(
+        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_THUMB2)),
+        AxisCombineFn::LargestMagnitude {
+            // JS thumb left
+            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_THUMB2)]],
+        },
+    );
+    mux.configure_axis(
+        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TOP)),
+        AxisCombineFn::LargestMagnitude {
+            // JS thumb right
+            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_TOP)]],
+        },
     );
 
     let js_s = update_s.clone();
@@ -187,9 +227,15 @@ fn run() -> Result<()> {
         handle_device(th_device, JoystickId(2), th_s);
     });
 
+    thread::spawn(move || loop {
+        if let Ok(update) = update_r.recv() {
+            mux.update(update);
+        }
+    });
+
     loop {
         if let Ok(output) = output_r.recv() {
-            dbg!(output);
+            println!("{}", output);
         }
     }
 }
