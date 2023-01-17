@@ -171,7 +171,7 @@ impl JoystickMux {
                     } else if x_val < 0 && y_val < 0 {
                         7
                     } else {
-                        unreachable!("cross product of plus/minus/zero x and y should be covered");
+                        unreachable!("All values of X and Y should be covered...");
                     })
                 }
             },
