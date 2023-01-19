@@ -1,10 +1,10 @@
-static GADGET_DIR: &'static str = "/sys/kernel/config/usb_gadget/composite_joystick";
-
 use anyhow::{Context, Result};
 use std::fs;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
+
+static GADGET_DIR: &'static str = "/sys/kernel/config/usb_gadget/composite_joystick";
 
 pub fn init_gadget() -> Result<()> {
     // Make gadget dir
@@ -174,4 +174,8 @@ pub fn uninit_gadget() -> Result<()> {
     fs::remove_dir(PathBuf::from(GADGET_DIR)).context("Failed to remove gadget")?;
 
     Ok(())
+}
+
+pub fn get_gadget_device() -> io::Result<fs::File> {
+    fs::File::create("/dev/hidg0")
 }

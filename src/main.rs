@@ -9,6 +9,7 @@ use std::thread;
 
 mod gadget;
 mod joystick_mux;
+mod report;
 
 use joystick_mux::{AxisCombineFn, AxisUpdate, InputAxis, InputAxisId, JoystickId, OutputAxisId};
 
@@ -27,19 +28,19 @@ enum Command {
 
 fn lower_bound_for(code: EventCode) -> i64 {
     match code {
-        EventCode::EV_ABS(_) => -1000,
-        EventCode::EV_REL(_) => -1000,
+        EventCode::EV_ABS(_) => -350,
+        EventCode::EV_REL(_) => -350,
         EventCode::EV_KEY(_) => 0,
-        _ => -1000,
+        _ => -350,
     }
 }
 
 fn upper_bound_for(code: EventCode) -> i64 {
     match code {
-        EventCode::EV_ABS(_) => 1000,
-        EventCode::EV_REL(_) => 1000,
+        EventCode::EV_ABS(_) => 350,
+        EventCode::EV_REL(_) => 350,
         EventCode::EV_KEY(_) => 1,
-        _ => 1000,
+        _ => 350,
     }
 }
 
@@ -149,7 +150,7 @@ fn run() -> Result<()> {
         AxisCombineFn::LargestMagnitude {
             inputs: vec![
                 js_axes[&EventCode::EV_ABS(EV_ABS::ABS_RZ)],
-                sp_axes[&EventCode::EV_REL(EV_REL::REL_RY)],
+                -sp_axes[&EventCode::EV_REL(EV_REL::REL_RY)],
             ],
         },
     );
@@ -159,7 +160,7 @@ fn run() -> Result<()> {
         AxisCombineFn::LargestMagnitude {
             inputs: vec![
                 sp_axes[&EventCode::EV_REL(EV_REL::REL_Y)],
-                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_THROTTLE)],
+                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_Z)],
             ],
         },
     );
@@ -184,29 +185,36 @@ fn run() -> Result<()> {
         },
     );
     mux.configure_axis(
-        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)),
+        // dial
+        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RUDDER)),
         AxisCombineFn::LargestMagnitude {
+            inputs: vec![th_axes[&EventCode::EV_ABS(EV_ABS::ABS_RUDDER)]],
+        },
+    );
+    mux.configure_axis(
+        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)),
+        AxisCombineFn::Button {
             // JS trigger
             inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)]],
         },
     );
     mux.configure_axis(
         OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_THUMB)),
-        AxisCombineFn::LargestMagnitude {
+        AxisCombineFn::Button {
             // JS thumb
             inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_THUMB)]],
         },
     );
     mux.configure_axis(
         OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_THUMB2)),
-        AxisCombineFn::LargestMagnitude {
+        AxisCombineFn::Button {
             // JS thumb left
             inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_THUMB2)]],
         },
     );
     mux.configure_axis(
         OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TOP)),
-        AxisCombineFn::LargestMagnitude {
+        AxisCombineFn::Button {
             // JS thumb right
             inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_TOP)]],
         },
@@ -233,9 +241,19 @@ fn run() -> Result<()> {
         }
     });
 
+    let mut device = gadget::get_gadget_device().context("Failed to open gadget device")?;
     loop {
         if let Ok(output) = output_r.recv() {
             println!("{}", output);
+            println!(
+                "{}",
+                hex::encode(report::make_report(
+                    output
+                        .axes
+                        .into_iter()
+                        .map(|(OutputAxisId(axis_id), value)| (axis_id, value))
+                ))
+            );
         }
     }
 }

@@ -18,6 +18,7 @@ pub struct JoystickId(pub u16);
 #[derive(Debug, Clone)]
 pub enum AxisCombineFn {
     LargestMagnitude { inputs: Vec<InputAxis> },
+    Button { inputs: Vec<InputAxis> },
     Hat { x: InputAxisId, y: InputAxisId },
 }
 
@@ -32,6 +33,17 @@ pub struct InputAxis {
     pub id: InputAxisId,
     pub lower_bound: i64,
     pub upper_bound: i64,
+}
+
+impl std::ops::Neg for InputAxis {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        return Self {
+            id: self.id,
+            lower_bound: self.upper_bound,
+            upper_bound: self.lower_bound,
+        };
+    }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
@@ -67,7 +79,7 @@ pub struct AxisUpdate {
 
 #[derive(Debug, PartialEq)]
 pub struct OutputState {
-    axes: Vec<(OutputAxisId, i64)>,
+    pub axes: Vec<(OutputAxisId, i64)>,
 }
 
 impl OutputState {
@@ -125,6 +137,20 @@ impl JoystickMux {
     pub fn output_axis(&self, axis_id: &OutputAxisId) -> Option<i64> {
         match self.axes.get(&axis_id) {
             Some(combine_fn) => match combine_fn {
+                AxisCombineFn::Button { inputs } => {
+                    let pressed = inputs
+                        .iter()
+                        .map(|input| match self.axis_states.get(&input.id) {
+                            Some(event) => event.value != 0,
+                            None => false,
+                        })
+                        .any(|value| value);
+                    if pressed {
+                        Some(1)
+                    } else {
+                        Some(0)
+                    }
+                }
                 AxisCombineFn::LargestMagnitude { inputs } => inputs
                     .iter()
                     .map(|input| match self.axis_states.get(&input.id) {
