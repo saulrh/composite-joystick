@@ -19,3 +19,11 @@ xdg = "2.4.1"
 crossbeam-channel = "0.5.6"
 static_assertions = "1.1.0"
 packed_struct = "0.10.1"
+
+[patch.crates-io]
+# Patched version of evdev-rs with extra enum values for EV_KEY codes
+# that aren't linux/include-event-codes.h e.g. 300. You may or may not
+# want this for your own configuration; it was necessary for mine
+# because a few _really important_ buttons on some of my joysticks
+# don't have the codes mapped.
+evdev-rs = { git = 'https://github.com/saulrh/evdev-rs.git' }

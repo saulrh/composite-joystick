@@ -16,10 +16,21 @@ pub enum JoystickMuxError {}
 pub struct JoystickId(pub u16);
 
 #[derive(Debug, Clone)]
+pub enum ButtonMode {
+    NonZero,
+    Positive,
+    Negative,
+}
+
+#[derive(Debug, Clone)]
 pub enum AxisCombineFn {
-    LargestMagnitude { inputs: Vec<InputAxis> },
-    Button { inputs: Vec<InputAxis> },
-    Hat { x: InputAxisId, y: InputAxisId },
+    LargestMagnitude {
+        inputs: Vec<InputAxis>,
+    },
+    Button {
+        mode: ButtonMode,
+        inputs: Vec<InputAxis>,
+    },
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
@@ -137,11 +148,15 @@ impl JoystickMux {
     pub fn output_axis(&self, axis_id: &OutputAxisId) -> Option<i64> {
         match self.axes.get(&axis_id) {
             Some(combine_fn) => match combine_fn {
-                AxisCombineFn::Button { inputs } => {
+                AxisCombineFn::Button { inputs, mode } => {
                     let pressed = inputs
                         .iter()
                         .map(|input| match self.axis_states.get(&input.id) {
-                            Some(event) => event.value != 0,
+                            Some(event) => match mode {
+                                ButtonMode::NonZero => event.value != 0,
+                                ButtonMode::Positive => event.value > 0,
+                                ButtonMode::Negative => event.value < 0,
+                            },
                             None => false,
                         })
                         .any(|value| value);
@@ -164,42 +179,6 @@ impl JoystickMux {
                     })
                     .max_by_key(|value| value.abs())
                     .map_or(None, |state| Some(state)),
-                AxisCombineFn::Hat { x, y } => {
-                    // zero to seven, starting at the top and going
-                    // clockwise. out of range is null.
-                    //
-                    // +Y is down.
-                    // +X is right.
-                    let x_val = match self.axis_states.get(x) {
-                        Some(x_val) => x_val.value,
-                        None => 0,
-                    };
-                    let y_val = match self.axis_states.get(y) {
-                        Some(y_val) => y_val.value,
-                        None => 0,
-                    };
-                    Some(if x_val == 0 && y_val == 0 {
-                        -1
-                    } else if x_val == 0 && y_val < 0 {
-                        0
-                    } else if x_val > 0 && y_val < 0 {
-                        1
-                    } else if x_val > 0 && y_val == 0 {
-                        2
-                    } else if x_val > 0 && y_val > 0 {
-                        3
-                    } else if x_val == 0 && y_val > 0 {
-                        4
-                    } else if x_val < 0 && y_val > 0 {
-                        5
-                    } else if x_val < 0 && y_val == 0 {
-                        6
-                    } else if x_val < 0 && y_val < 0 {
-                        7
-                    } else {
-                        unreachable!("All values of X and Y should be covered...");
-                    })
-                }
             },
             None => None,
         }
@@ -538,60 +517,5 @@ mod tests {
                 axes: vec![(OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)), 32767)],
             }
         );
-    }
-
-    #[test]
-    fn test_hat() {
-        let mut m = JoystickMux::new(None);
-        m.configure_axis(
-            OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)),
-            AxisCombineFn::Hat {
-                x: InputAxisId {
-                    joystick: JoystickId(0),
-                    axis: EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
-                },
-                y: InputAxisId {
-                    joystick: JoystickId(0),
-                    axis: EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
-                },
-            },
-        );
-
-        const VALUES: [(i32, i32, i64); 9] = [
-            (0, 0, -1),
-            (0, -1, 0),
-            (1, -1, 1),
-            (1, 0, 2),
-            (1, 1, 3),
-            (0, 1, 4),
-            (-1, 1, 5),
-            (-1, 0, 6),
-            (-1, -1, 7),
-        ];
-
-        for (x, y, hat) in VALUES {
-            m.update(AxisUpdate {
-                joystick: JoystickId(0),
-                event: InputEvent {
-                    time: ZERO_TIME,
-                    event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
-                    value: x,
-                },
-            });
-            m.update(AxisUpdate {
-                joystick: JoystickId(0),
-                event: InputEvent {
-                    time: ZERO_TIME,
-                    event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
-                    value: y,
-                },
-            });
-            assert_eq!(
-                m.output(),
-                OutputState {
-                    axes: vec![(OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)), hat)],
-                }
-            );
-        }
     }
 }

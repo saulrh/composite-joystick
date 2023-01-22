@@ -67,21 +67,22 @@ pub fn init_gadget() -> Result<()> {
         "1",
     )
     .context("Failed to set subclass")?;
-    // TODO: what's our report length?
     fs::write(
         PathBuf::from(GADGET_DIR)
             .join("functions")
             .join("hid.usb0")
             .join("report_length"),
-        "1",
+        "22",
     )
     .context("Failed to set report length")?;
+    let descriptor = include_str!("descriptor.hex");
+    let descriptor = descriptor.replace(" ", "");
     fs::write(
         PathBuf::from(GADGET_DIR)
             .join("functions")
             .join("hid.usb0")
             .join("report_desc"),
-        hex::decode(include_str!("descriptor.hex"))?,
+        hex::decode(descriptor)?,
     )
     .context("Failed to set report descriptor")?;
 

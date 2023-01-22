@@ -2,16 +2,18 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use evdev_rs::enums::{EventCode, EV_ABS, EV_KEY, EV_REL};
+use evdev_rs::enums::{EventCode, EV_ABS, EV_KEY};
 use evdev_rs::DeviceWrapper;
 use std::collections::HashMap;
+use std::io::Write;
 use std::thread;
 
+mod configuration;
 mod gadget;
 mod joystick_mux;
 mod report;
 
-use joystick_mux::{AxisCombineFn, AxisUpdate, InputAxis, InputAxisId, JoystickId, OutputAxisId};
+use joystick_mux::{AxisUpdate, InputAxis, InputAxisId, JoystickId, OutputAxisId};
 
 #[derive(clap::Parser)]
 struct Args {
@@ -24,6 +26,7 @@ enum Command {
     Init,
     Uninit,
     Run,
+    Report { param: String, value: i64 },
 }
 
 fn lower_bound_for(code: EventCode) -> i64 {
@@ -124,101 +127,7 @@ fn run() -> Result<()> {
     let th_axes = get_input_axes(&th_device, 2);
 
     let mut mux = joystick_mux::JoystickMux::new(Some(output_s));
-    mux.configure_axis(
-        // Yaw
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RZ)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![
-                js_axes[&EventCode::EV_ABS(EV_ABS::ABS_X)],
-                sp_axes[&EventCode::EV_REL(EV_REL::REL_RZ)],
-            ],
-        },
-    );
-    mux.configure_axis(
-        // Pitch
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RX)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![
-                js_axes[&EventCode::EV_ABS(EV_ABS::ABS_Y)],
-                sp_axes[&EventCode::EV_REL(EV_REL::REL_RX)],
-            ],
-        },
-    );
-    mux.configure_axis(
-        // Roll
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RY)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![
-                js_axes[&EventCode::EV_ABS(EV_ABS::ABS_RZ)],
-                -sp_axes[&EventCode::EV_REL(EV_REL::REL_RY)],
-            ],
-        },
-    );
-    mux.configure_axis(
-        // Throttle/translate f/b
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_Y)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![
-                sp_axes[&EventCode::EV_REL(EV_REL::REL_Y)],
-                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_Z)],
-            ],
-        },
-    );
-    mux.configure_axis(
-        // translate l/r
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![
-                sp_axes[&EventCode::EV_REL(EV_REL::REL_X)],
-                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_X)],
-            ],
-        },
-    );
-    mux.configure_axis(
-        // translate u/d
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_Z)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![
-                sp_axes[&EventCode::EV_REL(EV_REL::REL_Z)],
-                th_axes[&EventCode::EV_ABS(EV_ABS::ABS_Y)],
-            ],
-        },
-    );
-    mux.configure_axis(
-        // dial
-        OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_RUDDER)),
-        AxisCombineFn::LargestMagnitude {
-            inputs: vec![th_axes[&EventCode::EV_ABS(EV_ABS::ABS_RUDDER)]],
-        },
-    );
-    mux.configure_axis(
-        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)),
-        AxisCombineFn::Button {
-            // JS trigger
-            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_TRIGGER)]],
-        },
-    );
-    mux.configure_axis(
-        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_THUMB)),
-        AxisCombineFn::Button {
-            // JS thumb
-            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_THUMB)]],
-        },
-    );
-    mux.configure_axis(
-        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_THUMB2)),
-        AxisCombineFn::Button {
-            // JS thumb left
-            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_THUMB2)]],
-        },
-    );
-    mux.configure_axis(
-        OutputAxisId(EventCode::EV_KEY(EV_KEY::BTN_TOP)),
-        AxisCombineFn::Button {
-            // JS thumb right
-            inputs: vec![js_axes[&EventCode::EV_KEY(EV_KEY::BTN_TOP)]],
-        },
-    );
+    configuration::configure_mux(&mut mux, &js_axes, &th_axes, &sp_axes);
 
     let js_s = update_s.clone();
     thread::spawn(move || {
@@ -244,18 +153,76 @@ fn run() -> Result<()> {
     let mut device = gadget::get_gadget_device().context("Failed to open gadget device")?;
     loop {
         if let Ok(output) = output_r.recv() {
-            println!("{}", output);
-            println!(
-                "{}",
-                hex::encode(report::make_report(
-                    output
-                        .axes
-                        .into_iter()
-                        .map(|(OutputAxisId(axis_id), value)| (axis_id, value))
-                ))
+            let report = report::make_report(
+                output
+                    .axes
+                    .into_iter()
+                    .map(|(OutputAxisId(axis_id), value)| (axis_id, value)),
             );
+            device
+                .write(&report)
+                .context("Failed to write to gadget device")?;
         }
     }
+}
+
+fn report(param: &str, value: &i64) -> Result<()> {
+    let mut device = gadget::get_gadget_device().context("Failed to open gadget device")?;
+    let mut state = HashMap::new();
+    let param = match param {
+        "x" => EventCode::EV_ABS(EV_ABS::ABS_X),
+        "y" => EventCode::EV_ABS(EV_ABS::ABS_Y),
+        "z" => EventCode::EV_ABS(EV_ABS::ABS_Z),
+        "rx" => EventCode::EV_ABS(EV_ABS::ABS_RX),
+        "ry" => EventCode::EV_ABS(EV_ABS::ABS_RY),
+        "rz" => EventCode::EV_ABS(EV_ABS::ABS_RZ),
+        "slider" => EventCode::EV_ABS(EV_ABS::ABS_THROTTLE),
+        "dial" => EventCode::EV_ABS(EV_ABS::ABS_RUDDER),
+        "hatx" => EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
+        "haty" => EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
+        "trigger" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER),
+        "thumb" => EventCode::EV_KEY(EV_KEY::BTN_THUMB),
+        "thumb2" => EventCode::EV_KEY(EV_KEY::BTN_THUMB2),
+        "top" => EventCode::EV_KEY(EV_KEY::BTN_TOP),
+        "top2" => EventCode::EV_KEY(EV_KEY::BTN_TOP2),
+        "pinkie" => EventCode::EV_KEY(EV_KEY::BTN_PINKIE),
+        "base" => EventCode::EV_KEY(EV_KEY::BTN_BASE),
+        "base2" => EventCode::EV_KEY(EV_KEY::BTN_BASE2),
+        "base3" => EventCode::EV_KEY(EV_KEY::BTN_BASE3),
+        "base4" => EventCode::EV_KEY(EV_KEY::BTN_BASE4),
+        "base5" => EventCode::EV_KEY(EV_KEY::BTN_BASE5),
+        "base6" => EventCode::EV_KEY(EV_KEY::BTN_BASE6),
+        "triggerhappy1" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY1),
+        "triggerhappy2" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY2),
+        "triggerhappy3" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY3),
+        "triggerhappy4" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY4),
+        "triggerhappy5" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY5),
+        "triggerhappy6" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY6),
+        "triggerhappy7" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY7),
+        "triggerhappy8" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY8),
+        "triggerhappy9" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY9),
+        "triggerhappy10" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY10),
+        "triggerhappy11" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY11),
+        "triggerhappy12" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY12),
+        "triggerhappy13" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY13),
+        "triggerhappy14" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY14),
+        "triggerhappy15" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY15),
+        "triggerhappy16" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY16),
+        "triggerhappy17" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY17),
+        "triggerhappy18" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY18),
+        "triggerhappy19" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY19),
+        "triggerhappy20" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY20),
+        "triggerhappy21" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY21),
+        "triggerhappy22" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY22),
+        "triggerhappy23" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY23),
+        "triggerhappy24" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY24),
+        _ => panic!("unknown axis"),
+    };
+    state.insert(param, *value);
+    device
+        .write(&report::make_report(state.into_iter()))
+        .context("Failed to write to gadget device")?;
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -264,5 +231,6 @@ fn main() -> Result<()> {
         Command::Init => gadget::init_gadget(),
         Command::Uninit => gadget::uninit_gadget(),
         Command::Run => run(),
+        Command::Report { param, value } => report(param, value),
     }
 }
