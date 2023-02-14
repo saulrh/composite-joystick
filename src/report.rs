@@ -139,3 +139,160 @@ fn hatxy_to_angle(hatx: i64, haty: i64) -> u8 {
         _ => unreachable!("hat_x and hat_y should be in [-1 .. 1]"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hat_zero() {
+        assert_eq!(
+            make_report(vec! {}.into_iter()),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_hat_plus_x() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_HAT0X), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_hat_plus_y() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_HAT0Y), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_hat_combines() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_HAT0Y), 1),
+                    (EventCode::EV_ABS(EV_ABS::ABS_HAT0X), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_button_firstbyte() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_KEY(EV_KEY::BTN_TRIGGER), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_button_nextbyte() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_KEY(EV_KEY::BTN_TOP2), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x0f, 0x01, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_button_combo_bytes() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_KEY(EV_KEY::BTN_TOP2), 1),
+                    (EventCode::EV_KEY(EV_KEY::BTN_PINKIE), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x0f, 0x03, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_button_lastbyte() {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY32), 1),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x80
+            ]
+        );
+    }
+
+    fn assert_x(x: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_X), x),
+                }
+                .into_iter()
+            ),
+            [
+                bytea, byteb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_x() {
+        assert_x(1, 0x01, 0x00);
+        assert_x(15, 0x0f, 0x00);
+        assert_x(16, 0x10, 0x00);
+        assert_x(17, 0x11, 0x00);
+        assert_x(123, 0x7b, 0x00);
+        assert_x(1001, 0xe9, 0x03);
+        assert_x(-1, 0xff, 0xff);
+        assert_x(-1001, 0x17, 0xfc);
+    }
+}
