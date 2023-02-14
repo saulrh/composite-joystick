@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use evdev_rs::enums::{EventCode, EV_ABS, EV_KEY};
+use evdev_rs::enums::EventCode;
 use evdev_rs::DeviceWrapper;
 use std::collections::HashMap;
 use std::io::Write;
