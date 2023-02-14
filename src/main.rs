@@ -112,7 +112,7 @@ fn make_device<P: AsRef<std::path::Path>>(
     let dev = evdev_rs::Device::new_from_path(path).context("failed to open device")?;
     let axes = get_input_axes(&dev, *idx);
     *idx += 1;
-    return Ok((*idx, dev, axes));
+    Ok((*idx, dev, axes))
 }
 
 fn run() -> Result<()> {
@@ -144,7 +144,7 @@ fn run() -> Result<()> {
         handle_device(sp_device, JoystickId(sp_idx), sp_s);
     });
 
-    let th_s = update_s.clone();
+    let th_s = update_s;
     thread::spawn(move || {
         handle_device(th_device, JoystickId(th_idx), th_s);
     });

@@ -4,7 +4,7 @@ use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
-static GADGET_DIR: &'static str = "/sys/kernel/config/usb_gadget/composite_joystick";
+static GADGET_DIR: &str = "/sys/kernel/config/usb_gadget/composite_joystick";
 
 pub fn init_gadget() -> Result<()> {
     // Make gadget dir
@@ -76,7 +76,7 @@ pub fn init_gadget() -> Result<()> {
     )
     .context("Failed to set report length")?;
     let descriptor = include_str!("descriptor.hex");
-    let descriptor = descriptor.replace(" ", "");
+    let descriptor = descriptor.replace(' ', "");
     fs::write(
         PathBuf::from(GADGET_DIR)
             .join("functions")

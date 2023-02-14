@@ -49,11 +49,11 @@ pub struct InputAxis {
 impl std::ops::Neg for InputAxis {
     type Output = Self;
     fn neg(self) -> Self::Output {
-        return Self {
+        Self {
             id: self.id,
             lower_bound: self.upper_bound,
             upper_bound: self.lower_bound,
-        };
+        }
     }
 }
 
@@ -111,7 +111,7 @@ impl fmt::Display for OutputState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (axis, value) in self.axes.iter() {
             let OutputAxisId(code) = axis;
-            write!(f, "{}: {}\t", code, value)?;
+            write!(f, "{code}: {value}\t")?;
         }
         Ok(())
     }
@@ -146,7 +146,7 @@ impl JoystickMux {
     }
 
     pub fn output_axis(&self, axis_id: &OutputAxisId) -> Option<i64> {
-        match self.axes.get(&axis_id) {
+        match self.axes.get(axis_id) {
             Some(combine_fn) => match combine_fn {
                 AxisCombineFn::Button { inputs, mode } => {
                     let pressed = inputs
@@ -177,23 +177,18 @@ impl JoystickMux {
                         }
                         None => 0,
                     })
-                    .max_by_key(|value| value.abs())
-                    .map_or(None, |state| Some(state)),
+                    .max_by_key(|value| value.abs()),
             },
             None => None,
         }
     }
 
     pub fn output(&self) -> OutputState {
-        OutputState::new(self.axes.iter().map(|(output_id, _)| {
-            (
-                *output_id,
-                match self.output_axis(output_id) {
-                    Some(s) => s,
-                    None => 0,
-                },
-            )
-        }))
+        OutputState::new(
+            self.axes
+                .keys()
+                .map(|output_id| (*output_id, self.output_axis(output_id).unwrap_or(0))),
+        )
     }
 
     pub fn send_output(&mut self) {
