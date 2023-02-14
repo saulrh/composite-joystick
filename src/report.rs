@@ -3,31 +3,31 @@ use packed_struct::prelude::*;
 
 #[derive(PackedStruct, Debug)]
 #[packed_struct(bit_numbering = "msb0")]
-struct CompositeJoystickReportA {
+pub struct CompositeJoystickReport {
     #[packed_field(bits = "0..16", endian = "lsb")]
-    x: i16,
+    pub x: i16,
     #[packed_field(bits = "16..32", endian = "lsb")]
-    y: i16,
+    pub y: i16,
     #[packed_field(bits = "32..48", endian = "lsb")]
-    z: i16,
+    pub z: i16,
     #[packed_field(bits = "48..64", endian = "lsb")]
-    rx: i16,
+    pub rx: i16,
     #[packed_field(bits = "64..80", endian = "lsb")]
-    ry: i16,
+    pub ry: i16,
     #[packed_field(bits = "80..96", endian = "lsb")]
-    rz: i16,
+    pub rz: i16,
     #[packed_field(bits = "96..112", endian = "lsb")]
-    slider: i16,
+    pub slider: i16,
     #[packed_field(bits = "112..128", endian = "lsb")]
-    dial: i16,
+    pub dial: i16,
     #[packed_field(bits = "128..132", endian = "lsb")]
-    hat: Integer<u8, packed_bits::Bits<4>>,
+    pub hat: Integer<u8, packed_bits::Bits<4>>,
     #[packed_field(bits = "132..176", element_size_bits = "1")]
-    buttons: [bool; 44],
+    pub buttons: [bool; 44],
 }
 
 pub fn make_report(state: impl Iterator<Item = (EventCode, i64)>) -> [u8; 22] {
-    let mut result = CompositeJoystickReportA {
+    let mut result = CompositeJoystickReport {
         x: 0,
         y: 0,
         z: 0,
