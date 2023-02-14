@@ -41,7 +41,7 @@ pub fn make_report(state: impl Iterator<Item = (EventCode, i64)>) -> [u8; 22] {
     };
     let mut hatx: i64 = 0;
     let mut haty: i64 = 0;
-    for (code, value) in state.into_iter() {
+    for (code, value) in state {
         match code {
             EventCode::EV_ABS(EV_ABS::ABS_X) => result.x = value as i16,
             EventCode::EV_ABS(EV_ABS::ABS_Y) => result.y = value as i16,
