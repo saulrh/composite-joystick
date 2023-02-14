@@ -26,7 +26,6 @@ enum Command {
     Init,
     Uninit,
     Run,
-    Report { param: String, value: i64 },
 }
 
 fn lower_bound_for(code: EventCode) -> i64 {
@@ -166,71 +165,11 @@ fn run() -> Result<()> {
     }
 }
 
-fn report(param: &str, value: &i64) -> Result<()> {
-    let mut device = gadget::get_gadget_device().context("Failed to open gadget device")?;
-    let mut state = HashMap::new();
-    let param = match param {
-        "x" => EventCode::EV_ABS(EV_ABS::ABS_X),
-        "y" => EventCode::EV_ABS(EV_ABS::ABS_Y),
-        "z" => EventCode::EV_ABS(EV_ABS::ABS_Z),
-        "rx" => EventCode::EV_ABS(EV_ABS::ABS_RX),
-        "ry" => EventCode::EV_ABS(EV_ABS::ABS_RY),
-        "rz" => EventCode::EV_ABS(EV_ABS::ABS_RZ),
-        "slider" => EventCode::EV_ABS(EV_ABS::ABS_THROTTLE),
-        "dial" => EventCode::EV_ABS(EV_ABS::ABS_RUDDER),
-        "hatx" => EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
-        "haty" => EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
-        "trigger" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER),
-        "thumb" => EventCode::EV_KEY(EV_KEY::BTN_THUMB),
-        "thumb2" => EventCode::EV_KEY(EV_KEY::BTN_THUMB2),
-        "top" => EventCode::EV_KEY(EV_KEY::BTN_TOP),
-        "top2" => EventCode::EV_KEY(EV_KEY::BTN_TOP2),
-        "pinkie" => EventCode::EV_KEY(EV_KEY::BTN_PINKIE),
-        "base" => EventCode::EV_KEY(EV_KEY::BTN_BASE),
-        "base2" => EventCode::EV_KEY(EV_KEY::BTN_BASE2),
-        "base3" => EventCode::EV_KEY(EV_KEY::BTN_BASE3),
-        "base4" => EventCode::EV_KEY(EV_KEY::BTN_BASE4),
-        "base5" => EventCode::EV_KEY(EV_KEY::BTN_BASE5),
-        "base6" => EventCode::EV_KEY(EV_KEY::BTN_BASE6),
-        "triggerhappy1" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY1),
-        "triggerhappy2" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY2),
-        "triggerhappy3" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY3),
-        "triggerhappy4" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY4),
-        "triggerhappy5" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY5),
-        "triggerhappy6" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY6),
-        "triggerhappy7" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY7),
-        "triggerhappy8" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY8),
-        "triggerhappy9" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY9),
-        "triggerhappy10" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY10),
-        "triggerhappy11" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY11),
-        "triggerhappy12" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY12),
-        "triggerhappy13" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY13),
-        "triggerhappy14" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY14),
-        "triggerhappy15" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY15),
-        "triggerhappy16" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY16),
-        "triggerhappy17" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY17),
-        "triggerhappy18" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY18),
-        "triggerhappy19" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY19),
-        "triggerhappy20" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY20),
-        "triggerhappy21" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY21),
-        "triggerhappy22" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY22),
-        "triggerhappy23" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY23),
-        "triggerhappy24" => EventCode::EV_KEY(EV_KEY::BTN_TRIGGER_HAPPY24),
-        _ => panic!("unknown axis"),
-    };
-    state.insert(param, *value);
-    device
-        .write(&report::make_report(state.into_iter()))
-        .context("Failed to write to gadget device")?;
-    Ok(())
-}
-
 fn main() -> Result<()> {
     let args = Args::parse();
     match &args.command {
         Command::Init => gadget::init_gadget(),
         Command::Uninit => gadget::uninit_gadget(),
         Command::Run => run(),
-        Command::Report { param, value } => report(param, value),
     }
 }
