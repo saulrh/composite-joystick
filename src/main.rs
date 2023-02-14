@@ -6,6 +6,7 @@ use evdev_rs::enums::EventCode;
 use evdev_rs::DeviceWrapper;
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::Mutex;
 use std::thread;
 
 mod configuration;
@@ -103,44 +104,49 @@ fn handle_device(
     }
 }
 
+static DEVICE_INDEX_SEQ: Mutex<u16> = Mutex::new(0);
+fn make_device<P: AsRef<std::path::Path>>(
+    path: P,
+) -> Result<(u16, evdev_rs::Device, HashMap<EventCode, InputAxis>)> {
+    let mut idx = DEVICE_INDEX_SEQ.lock().unwrap();
+    let dev = evdev_rs::Device::new_from_path(path).context("failed to open device")?;
+    let axes = get_input_axes(&dev, *idx);
+    *idx += 1;
+    return Ok((*idx, dev, axes));
+}
+
 fn run() -> Result<()> {
     let (update_s, update_r) = crossbeam_channel::bounded::<joystick_mux::AxisUpdate>(5);
     let (output_s, output_r) = crossbeam_channel::bounded::<joystick_mux::OutputState>(5);
 
-    let js_device = evdev_rs::Device::new_from_path(
-        "/dev/input/by-id/usb-Thrustmaster_T.16000M-event-joystick",
-    )
-    .context("Failed to open joystick")?;
-    let js_axes = get_input_axes(&js_device, 0);
+    let (js_idx, js_device, js_axes) =
+        make_device("/dev/input/by-id/usb-Thrustmaster_T.16000M-event-joystick")
+            .context("while opening joystick")?;
 
-    let sp_device = evdev_rs::Device::new_from_path(
-        "/dev/input/by-id/usb-3Dconnexion_SpaceMouse_Pro-event-mouse",
-    )
-    .context("Failed to open spacemouse")?;
-    let sp_axes = get_input_axes(&sp_device, 1);
+    let (sp_idx, sp_device, sp_axes) =
+        make_device("/dev/input/by-id/usb-3Dconnexion_SpaceMouse_Pro-event-mouse")
+            .context("while opening spacemouse")?;
 
-    let th_device = evdev_rs::Device::new_from_path(
-        "/dev/input/by-id/usb-Thrustmaster_TWCS_Throttle-event-joystick",
-    )
-    .context("Failed to open throttle")?;
-    let th_axes = get_input_axes(&th_device, 2);
+    let (th_idx, th_device, th_axes) =
+        make_device("/dev/input/by-id/usb-Thrustmaster_TWCS_Throttle-event-joystick")
+            .context("while opening throttle")?;
 
     let mut mux = joystick_mux::JoystickMux::new(Some(output_s));
     configuration::configure_mux(&mut mux, &js_axes, &th_axes, &sp_axes);
 
     let js_s = update_s.clone();
     thread::spawn(move || {
-        handle_device(js_device, JoystickId(0), js_s);
+        handle_device(js_device, JoystickId(js_idx), js_s);
     });
 
     let sp_s = update_s.clone();
     thread::spawn(move || {
-        handle_device(sp_device, JoystickId(1), sp_s);
+        handle_device(sp_device, JoystickId(sp_idx), sp_s);
     });
 
     let th_s = update_s.clone();
     thread::spawn(move || {
-        handle_device(th_device, JoystickId(2), th_s);
+        handle_device(th_device, JoystickId(th_idx), th_s);
     });
 
     thread::spawn(move || loop {
