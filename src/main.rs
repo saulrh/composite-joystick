@@ -1,5 +1,3 @@
-#![feature(iter_intersperse)]
-
 use anyhow::{Context, Result};
 use clap::Parser;
 use evdev_rs::enums::EventCode;

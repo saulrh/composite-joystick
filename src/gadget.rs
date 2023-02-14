@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use std::fs;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
@@ -126,20 +127,19 @@ pub fn init_gadget() -> Result<()> {
     .context("Failed to symlink function into config dir")?;
 
     // write UDC
-    let udcs: std::ffi::OsString = PathBuf::from("/sys/class/udc")
+    let udcs = PathBuf::from("/sys/class/udc")
         .read_dir()
         .context("Failed to read /sys/class/udc")?
         .collect::<Result<Vec<_>, io::Error>>()
         .context("Failed to read child of /sys/class/udc")?
         .into_iter()
-        .map(|de| -> std::ffi::OsString { de.file_name() })
-        .intersperse(" ".into())
-        .collect();
-    fs::write(
-        PathBuf::from(GADGET_DIR).join("UDC"),
-        udcs.as_os_str().as_bytes(),
-    )
-    .context("Failed to write UDC")?;
+        // TODO: this could be handled _far_ more cleanly with
+        // `intersperse`, when that's stabilized, and keeping
+        // everything in std::ffi::OsStr until after it gets
+        // `collect`ed.
+        .map(|de| String::from_utf8(de.file_name().as_os_str().as_bytes().into()).unwrap())
+        .join(" ");
+    fs::write(PathBuf::from(GADGET_DIR).join("UDC"), udcs).context("Failed to write UDC")?;
 
     Ok(())
 }
