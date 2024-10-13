@@ -109,8 +109,9 @@ fn make_device<P: AsRef<std::path::Path>>(
     let mut idx = DEVICE_INDEX_SEQ.lock().unwrap();
     let dev = evdev_rs::Device::new_from_path(path).context("failed to open device")?;
     let axes = get_input_axes(&dev, *idx);
+    let result = (*idx, dev, axes);
     *idx += 1;
-    Ok((*idx, dev, axes))
+    Ok(result)
 }
 
 fn run() -> Result<()> {
