@@ -4,13 +4,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 
-use thiserror::Error;
-
 const OUTPUT_UPPER_BOUND: i64 = 32767;
 const OUTPUT_LOWER_BOUND: i64 = -32767;
-
-#[derive(Error, Debug)]
-pub enum JoystickMuxError {}
 
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
 pub struct JoystickId(pub u16);
@@ -151,15 +146,14 @@ impl JoystickMux {
                 AxisCombineFn::Button { inputs, mode } => {
                     let pressed = inputs
                         .iter()
-                        .map(|input| match self.axis_states.get(&input.id) {
+                        .any(|input| match self.axis_states.get(&input.id) {
                             Some(event) => match mode {
                                 ButtonMode::NonZero => event.value != 0,
                                 ButtonMode::Positive => event.value > 0,
                                 ButtonMode::Negative => event.value < 0,
                             },
                             None => false,
-                        })
-                        .any(|value| value);
+                        });
                     if pressed {
                         Some(1)
                     } else {
