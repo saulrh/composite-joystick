@@ -7,6 +7,7 @@ use std::io::Write;
 use std::sync::Mutex;
 use std::thread;
 
+mod config_loader;
 mod configuration;
 mod gadget;
 mod joystick_mux;
@@ -176,5 +177,129 @@ fn main() -> Result<()> {
         Command::Init => gadget::init_gadget(),
         Command::Uninit => gadget::uninit_gadget(),
         Command::Run => run(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lower_bound_for_abs() {
+        let code = EventCode::EV_ABS(evdev_rs::enums::EV_ABS::ABS_X);
+        assert_eq!(lower_bound_for(code), -350);
+    }
+
+    #[test]
+    fn test_lower_bound_for_rel() {
+        let code = EventCode::EV_REL(evdev_rs::enums::EV_REL::REL_X);
+        assert_eq!(lower_bound_for(code), -350);
+    }
+
+    #[test]
+    fn test_lower_bound_for_key() {
+        let code = EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0);
+        assert_eq!(lower_bound_for(code), 0);
+    }
+
+    #[test]
+    fn test_lower_bound_for_other() {
+        let code = EventCode::EV_SW(evdev_rs::enums::EV_SW::SW_LID);
+        assert_eq!(lower_bound_for(code), -350);
+    }
+
+    #[test]
+    fn test_upper_bound_for_abs() {
+        let code = EventCode::EV_ABS(evdev_rs::enums::EV_ABS::ABS_Y);
+        assert_eq!(upper_bound_for(code), 350);
+    }
+
+    #[test]
+    fn test_upper_bound_for_rel() {
+        let code = EventCode::EV_REL(evdev_rs::enums::EV_REL::REL_Y);
+        assert_eq!(upper_bound_for(code), 350);
+    }
+
+    #[test]
+    fn test_upper_bound_for_key() {
+        let code = EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_1);
+        assert_eq!(upper_bound_for(code), 1);
+    }
+
+    #[test]
+    fn test_upper_bound_for_other() {
+        let code = EventCode::EV_MSC(evdev_rs::enums::EV_MSC::MSC_SCAN);
+        assert_eq!(upper_bound_for(code), 350);
+    }
+
+    #[test]
+    fn test_lower_upper_bounds_all_key_types() {
+        // Test multiple key event codes
+        let keys = vec![
+            evdev_rs::enums::EV_KEY::BTN_TRIGGER,
+            evdev_rs::enums::EV_KEY::BTN_THUMB,
+            evdev_rs::enums::EV_KEY::KEY_A,
+            evdev_rs::enums::EV_KEY::KEY_SPACE,
+        ];
+
+        for key in keys {
+            let code = EventCode::EV_KEY(key);
+            assert_eq!(lower_bound_for(code), 0, "Failed for key {:?}", key);
+            assert_eq!(upper_bound_for(code), 1, "Failed for key {:?}", key);
+        }
+    }
+
+    #[test]
+    fn test_lower_upper_bounds_all_abs_types() {
+        // Test multiple absolute axis codes
+        let axes = vec![
+            evdev_rs::enums::EV_ABS::ABS_X,
+            evdev_rs::enums::EV_ABS::ABS_Y,
+            evdev_rs::enums::EV_ABS::ABS_Z,
+            evdev_rs::enums::EV_ABS::ABS_RX,
+            evdev_rs::enums::EV_ABS::ABS_RY,
+            evdev_rs::enums::EV_ABS::ABS_RZ,
+        ];
+
+        for axis in axes {
+            let code = EventCode::EV_ABS(axis);
+            assert_eq!(lower_bound_for(code), -350, "Failed for axis {:?}", axis);
+            assert_eq!(upper_bound_for(code), 350, "Failed for axis {:?}", axis);
+        }
+    }
+
+    #[test]
+    fn test_lower_upper_bounds_all_rel_types() {
+        // Test multiple relative axis codes
+        let axes = vec![
+            evdev_rs::enums::EV_REL::REL_X,
+            evdev_rs::enums::EV_REL::REL_Y,
+            evdev_rs::enums::EV_REL::REL_Z,
+            evdev_rs::enums::EV_REL::REL_RX,
+            evdev_rs::enums::EV_REL::REL_RY,
+            evdev_rs::enums::EV_REL::REL_RZ,
+        ];
+
+        for axis in axes {
+            let code = EventCode::EV_REL(axis);
+            assert_eq!(lower_bound_for(code), -350, "Failed for rel axis {:?}", axis);
+            assert_eq!(upper_bound_for(code), 350, "Failed for rel axis {:?}", axis);
+        }
+    }
+
+    #[test]
+    fn test_bounds_consistency() {
+        // Ensure lower bound is always less than upper bound (except for inverted axes)
+        let test_codes = vec![
+            EventCode::EV_ABS(evdev_rs::enums::EV_ABS::ABS_X),
+            EventCode::EV_REL(evdev_rs::enums::EV_REL::REL_X),
+            EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+        ];
+
+        for code in test_codes {
+            let lower = lower_bound_for(code);
+            let upper = upper_bound_for(code);
+            assert!(lower < upper, "Lower bound should be less than upper bound for {:?}", code);
+        }
     }
 }

@@ -513,4 +513,493 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_button_mode_nonzero() {
+        let mut m = JoystickMux::new(None);
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER)),
+            AxisCombineFn::Button {
+                mode: ButtonMode::NonZero,
+                inputs: vec![InputAxis {
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                    },
+                    lower_bound: 0,
+                    upper_bound: 1,
+                }],
+            },
+        );
+
+        // Test zero value
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 0,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+
+        // Test positive value
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Test negative value (should also trigger for NonZero)
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: -1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+    }
+
+    #[test]
+    fn test_button_mode_positive() {
+        let mut m = JoystickMux::new(None);
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER)),
+            AxisCombineFn::Button {
+                mode: ButtonMode::Positive,
+                inputs: vec![InputAxis {
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
+                    },
+                    lower_bound: -1,
+                    upper_bound: 1,
+                }],
+            },
+        );
+
+        // Test zero value - should not trigger
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
+                value: 0,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+
+        // Test positive value - should trigger
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Test negative value - should not trigger
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0Y),
+                value: -1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+    }
+
+    #[test]
+    fn test_button_mode_negative() {
+        let mut m = JoystickMux::new(None);
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER)),
+            AxisCombineFn::Button {
+                mode: ButtonMode::Negative,
+                inputs: vec![InputAxis {
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
+                    },
+                    lower_bound: -1,
+                    upper_bound: 1,
+                }],
+            },
+        );
+
+        // Test zero value - should not trigger
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
+                value: 0,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+
+        // Test negative value - should trigger
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
+                value: -1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Test positive value - should not trigger
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_HAT0X),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+    }
+
+    #[test]
+    fn test_button_multiple_inputs_any() {
+        let mut m = JoystickMux::new(None);
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER)),
+            AxisCombineFn::Button {
+                mode: ButtonMode::NonZero,
+                inputs: vec![
+                    InputAxis {
+                        id: InputAxisId {
+                            joystick: JoystickId(0),
+                            axis: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                        },
+                        lower_bound: 0,
+                        upper_bound: 1,
+                    },
+                    InputAxis {
+                        id: InputAxisId {
+                            joystick: JoystickId(0),
+                            axis: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_1),
+                        },
+                        lower_bound: 0,
+                        upper_bound: 1,
+                    },
+                    InputAxis {
+                        id: InputAxisId {
+                            joystick: JoystickId(1),
+                            axis: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_2),
+                        },
+                        lower_bound: 0,
+                        upper_bound: 1,
+                    },
+                ],
+            },
+        );
+
+        // No buttons pressed
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+
+        // Press first button
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Release first, press second
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 0,
+            },
+        });
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_1),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Press third button from different joystick
+        m.update(AxisUpdate {
+            joystick: JoystickId(1),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_2),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Release all
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_1),
+                value: 0,
+            },
+        });
+        m.update(AxisUpdate {
+            joystick: JoystickId(1),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_2),
+                value: 0,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+    }
+
+    #[test]
+    fn test_ev_syn_triggers_send() {
+        use evdev_rs::enums::EV_SYN;
+
+        let (sender, receiver) = crossbeam_channel::bounded::<OutputState>(5);
+        let mut m = JoystickMux::new(Some(sender));
+
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)),
+            AxisCombineFn::LargestMagnitude {
+                inputs: vec![InputAxis {
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                    },
+                    lower_bound: -32767,
+                    upper_bound: 32767,
+                }],
+            },
+        );
+
+        // Update axis value
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 100,
+            },
+        });
+
+        // No output should be sent yet
+        assert!(receiver.try_recv().is_err());
+
+        // Send EV_SYN to trigger output
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_SYN(EV_SYN::SYN_REPORT),
+                value: 0,
+            },
+        });
+
+        // Now output should be available
+        let output = receiver.try_recv().expect("Expected output after EV_SYN");
+        assert_eq!(
+            output,
+            OutputState {
+                axes: vec![(OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)), 100)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_multiple_joysticks() {
+        let mut m = JoystickMux::new(None);
+
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)),
+            AxisCombineFn::LargestMagnitude {
+                inputs: vec![
+                    InputAxis {
+                        id: InputAxisId {
+                            joystick: JoystickId(0),
+                            axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                        },
+                        lower_bound: -100,
+                        upper_bound: 100,
+                    },
+                    InputAxis {
+                        id: InputAxisId {
+                            joystick: JoystickId(1),
+                            axis: EventCode::EV_ABS(EV_ABS::ABS_Y),
+                        },
+                        lower_bound: -100,
+                        upper_bound: 100,
+                    },
+                    InputAxis {
+                        id: InputAxisId {
+                            joystick: JoystickId(2),
+                            axis: EventCode::EV_ABS(EV_ABS::ABS_Z),
+                        },
+                        lower_bound: -100,
+                        upper_bound: 100,
+                    },
+                ],
+            },
+        );
+
+        // Update from joystick 0
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 50,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(16383));
+
+        // Update from joystick 1 with larger magnitude
+        m.update(AxisUpdate {
+            joystick: JoystickId(1),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_Y),
+                value: -75,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(-24576));
+
+        // Update from joystick 2 with smaller magnitude (should not change output)
+        m.update(AxisUpdate {
+            joystick: JoystickId(2),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_Z),
+                value: 25,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(-24576));
+
+        // Update joystick 2 with largest magnitude
+        m.update(AxisUpdate {
+            joystick: JoystickId(2),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_Z),
+                value: 100,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(32767));
+    }
+
+    #[test]
+    fn test_send_output_with_channel() {
+        let (sender, receiver) = crossbeam_channel::bounded::<OutputState>(5);
+        let mut m = JoystickMux::new(Some(sender));
+
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)),
+            AxisCombineFn::LargestMagnitude {
+                inputs: vec![InputAxis {
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_ABS(EV_ABS::ABS_X),
+                    },
+                    lower_bound: -32767,
+                    upper_bound: 32767,
+                }],
+            },
+        );
+
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_ABS(EV_ABS::ABS_X),
+                value: 1234,
+            },
+        });
+
+        // Manually call send_output
+        m.send_output();
+
+        let output = receiver.try_recv().expect("Expected output");
+        assert_eq!(
+            output,
+            OutputState {
+                axes: vec![(OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X)), 1234)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_button_state_transitions() {
+        let mut m = JoystickMux::new(None);
+        m.configure_axis(
+            OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER)),
+            AxisCombineFn::Button {
+                mode: ButtonMode::NonZero,
+                inputs: vec![InputAxis {
+                    id: InputAxisId {
+                        joystick: JoystickId(0),
+                        axis: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                    },
+                    lower_bound: 0,
+                    upper_bound: 1,
+                }],
+            },
+        );
+
+        // Initial state - no data
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+
+        // Press
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Hold (same value)
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 1,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(1));
+
+        // Release
+        m.update(AxisUpdate {
+            joystick: JoystickId(0),
+            event: InputEvent {
+                time: ZERO_TIME,
+                event_code: EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_0),
+                value: 0,
+            },
+        });
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+
+        // Stay released
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_KEY(evdev_rs::enums::EV_KEY::BTN_TRIGGER))), Some(0));
+    }
 }
