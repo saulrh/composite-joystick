@@ -500,59 +500,66 @@ mod tests {
     #[test]
     fn test_all_buttons() {
         // Test each button individually
+        // Note: Byte 16 has HAT in lower nibble (0x0f), buttons start in upper nibble
         let button_map = vec![
-            (EV_KEY::BTN_TRIGGER, 0, 0x01),
-            (EV_KEY::BTN_THUMB, 1, 0x02),
-            (EV_KEY::BTN_THUMB2, 2, 0x04),
-            (EV_KEY::BTN_TOP, 3, 0x08),
-            (EV_KEY::BTN_TOP2, 17, 0x01),
-            (EV_KEY::BTN_PINKIE, 17, 0x02),
-            (EV_KEY::BTN_BASE, 17, 0x04),
-            (EV_KEY::BTN_BASE2, 17, 0x08),
-            (EV_KEY::BTN_BASE3, 17, 0x10),
-            (EV_KEY::BTN_BASE4, 17, 0x20),
-            (EV_KEY::BTN_BASE5, 17, 0x40),
-            (EV_KEY::BTN_BASE6, 17, 0x80),
-            (EV_KEY::BTN_TRIGGER_HAPPY1, 18, 0x01),
-            (EV_KEY::BTN_TRIGGER_HAPPY2, 18, 0x02),
-            (EV_KEY::BTN_TRIGGER_HAPPY3, 18, 0x04),
-            (EV_KEY::BTN_TRIGGER_HAPPY4, 18, 0x08),
-            (EV_KEY::BTN_TRIGGER_HAPPY5, 18, 0x10),
-            (EV_KEY::BTN_TRIGGER_HAPPY6, 18, 0x20),
-            (EV_KEY::BTN_TRIGGER_HAPPY7, 18, 0x40),
-            (EV_KEY::BTN_TRIGGER_HAPPY8, 18, 0x80),
-            (EV_KEY::BTN_TRIGGER_HAPPY9, 19, 0x01),
-            (EV_KEY::BTN_TRIGGER_HAPPY10, 19, 0x02),
-            (EV_KEY::BTN_TRIGGER_HAPPY11, 19, 0x04),
-            (EV_KEY::BTN_TRIGGER_HAPPY12, 19, 0x08),
-            (EV_KEY::BTN_TRIGGER_HAPPY13, 19, 0x10),
-            (EV_KEY::BTN_TRIGGER_HAPPY14, 19, 0x20),
-            (EV_KEY::BTN_TRIGGER_HAPPY15, 19, 0x40),
-            (EV_KEY::BTN_TRIGGER_HAPPY16, 19, 0x80),
-            (EV_KEY::BTN_TRIGGER_HAPPY17, 20, 0x01),
-            (EV_KEY::BTN_TRIGGER_HAPPY18, 20, 0x02),
-            (EV_KEY::BTN_TRIGGER_HAPPY19, 20, 0x04),
-            (EV_KEY::BTN_TRIGGER_HAPPY20, 20, 0x08),
-            (EV_KEY::BTN_TRIGGER_HAPPY21, 20, 0x10),
-            (EV_KEY::BTN_TRIGGER_HAPPY22, 20, 0x20),
-            (EV_KEY::BTN_TRIGGER_HAPPY23, 20, 0x40),
-            (EV_KEY::BTN_TRIGGER_HAPPY24, 20, 0x80),
-            (EV_KEY::BTN_TRIGGER_HAPPY25, 21, 0x01),
-            (EV_KEY::BTN_TRIGGER_HAPPY26, 21, 0x02),
-            (EV_KEY::BTN_TRIGGER_HAPPY27, 21, 0x04),
-            (EV_KEY::BTN_TRIGGER_HAPPY28, 21, 0x08),
-            (EV_KEY::BTN_TRIGGER_HAPPY29, 21, 0x10),
-            (EV_KEY::BTN_TRIGGER_HAPPY30, 21, 0x20),
-            (EV_KEY::BTN_TRIGGER_HAPPY31, 21, 0x40),
-            (EV_KEY::BTN_TRIGGER_HAPPY32, 21, 0x80),
+            (EV_KEY::BTN_TRIGGER, 16, 0x10),    // buttons[0]
+            (EV_KEY::BTN_THUMB, 16, 0x20),      // buttons[1]
+            (EV_KEY::BTN_THUMB2, 16, 0x40),     // buttons[2]
+            (EV_KEY::BTN_TOP, 16, 0x80),        // buttons[3]
+            (EV_KEY::BTN_TOP2, 17, 0x01),       // buttons[4]
+            (EV_KEY::BTN_PINKIE, 17, 0x02),     // buttons[5]
+            (EV_KEY::BTN_BASE, 17, 0x04),       // buttons[6]
+            (EV_KEY::BTN_BASE2, 17, 0x08),      // buttons[7]
+            (EV_KEY::BTN_BASE3, 17, 0x10),      // buttons[8]
+            (EV_KEY::BTN_BASE4, 17, 0x20),      // buttons[9]
+            (EV_KEY::BTN_BASE5, 17, 0x40),      // buttons[10]
+            (EV_KEY::BTN_BASE6, 17, 0x80),      // buttons[11]
+            (EV_KEY::BTN_TRIGGER_HAPPY1, 18, 0x01),   // buttons[12]
+            (EV_KEY::BTN_TRIGGER_HAPPY2, 18, 0x02),   // buttons[13]
+            (EV_KEY::BTN_TRIGGER_HAPPY3, 18, 0x04),   // buttons[14]
+            (EV_KEY::BTN_TRIGGER_HAPPY4, 18, 0x08),   // buttons[15]
+            (EV_KEY::BTN_TRIGGER_HAPPY5, 18, 0x10),   // buttons[16]
+            (EV_KEY::BTN_TRIGGER_HAPPY6, 18, 0x20),   // buttons[17]
+            (EV_KEY::BTN_TRIGGER_HAPPY7, 18, 0x40),   // buttons[18]
+            (EV_KEY::BTN_TRIGGER_HAPPY8, 18, 0x80),   // buttons[19]
+            (EV_KEY::BTN_TRIGGER_HAPPY9, 19, 0x01),   // buttons[20]
+            (EV_KEY::BTN_TRIGGER_HAPPY10, 19, 0x02),  // buttons[21]
+            (EV_KEY::BTN_TRIGGER_HAPPY11, 19, 0x04),  // buttons[22]
+            (EV_KEY::BTN_TRIGGER_HAPPY12, 19, 0x08),  // buttons[23]
+            (EV_KEY::BTN_TRIGGER_HAPPY13, 19, 0x10),  // buttons[24]
+            (EV_KEY::BTN_TRIGGER_HAPPY14, 19, 0x20),  // buttons[25]
+            (EV_KEY::BTN_TRIGGER_HAPPY15, 19, 0x40),  // buttons[26]
+            (EV_KEY::BTN_TRIGGER_HAPPY16, 19, 0x80),  // buttons[27]
+            (EV_KEY::BTN_TRIGGER_HAPPY17, 20, 0x01),  // buttons[28]
+            (EV_KEY::BTN_TRIGGER_HAPPY18, 20, 0x02),  // buttons[29]
+            (EV_KEY::BTN_TRIGGER_HAPPY19, 20, 0x04),  // buttons[30]
+            (EV_KEY::BTN_TRIGGER_HAPPY20, 20, 0x08),  // buttons[31]
+            (EV_KEY::BTN_TRIGGER_HAPPY21, 20, 0x10),  // buttons[32]
+            (EV_KEY::BTN_TRIGGER_HAPPY22, 20, 0x20),  // buttons[33]
+            (EV_KEY::BTN_TRIGGER_HAPPY23, 20, 0x40),  // buttons[34]
+            (EV_KEY::BTN_TRIGGER_HAPPY24, 20, 0x80),  // buttons[35]
+            (EV_KEY::BTN_TRIGGER_HAPPY25, 21, 0x01),  // buttons[36]
+            (EV_KEY::BTN_TRIGGER_HAPPY26, 21, 0x02),  // buttons[37]
+            (EV_KEY::BTN_TRIGGER_HAPPY27, 21, 0x04),  // buttons[38]
+            (EV_KEY::BTN_TRIGGER_HAPPY28, 21, 0x08),  // buttons[39]
+            (EV_KEY::BTN_TRIGGER_HAPPY29, 21, 0x10),  // buttons[40]
+            (EV_KEY::BTN_TRIGGER_HAPPY30, 21, 0x20),  // buttons[41]
+            (EV_KEY::BTN_TRIGGER_HAPPY31, 21, 0x40),  // buttons[42]
+            (EV_KEY::BTN_TRIGGER_HAPPY32, 21, 0x80),  // buttons[43]
         ];
 
         for (button, byte_idx, expected_mask) in button_map {
             let report = make_report(vec![(EventCode::EV_KEY(button), 1)].into_iter());
+            // For byte 16, need to account for HAT neutral (0x0f)
+            let expected_value = if byte_idx == 16 {
+                expected_mask | 0x0f
+            } else {
+                expected_mask
+            };
             assert_eq!(
-                report[byte_idx], expected_mask,
+                report[byte_idx], expected_value,
                 "Failed for button {:?}: expected byte[{}] = {:#04x}, got {:#04x}",
-                button, byte_idx, expected_mask, report[byte_idx]
+                button, byte_idx, expected_value, report[byte_idx]
             );
         }
     }
@@ -567,10 +574,10 @@ mod tests {
             ]
             .into_iter(),
         );
-        // All three buttons should be set in byte 16
-        // 0x01 | 0x02 | 0x04 = 0x07, plus 0x0f for hat = 0x0f (hat in upper nibble)
-        assert_eq!(report[16], 0x0f); // HAT neutral
-        assert_eq!(report[17], 0x07); // Three buttons
+        // All three buttons are in byte 16 (upper nibble)
+        // BTN_TRIGGER=0x10, BTN_THUMB=0x20, BTN_THUMB2=0x40
+        // Combined: 0x10 | 0x20 | 0x40 = 0x70, plus HAT neutral (0x0f) = 0x7f
+        assert_eq!(report[16], 0x7f); // HAT neutral (0x0f) + three buttons (0x70)
     }
 
     #[test]
@@ -601,11 +608,11 @@ mod tests {
         assert_eq!(report[10], 0xd0);
         assert_eq!(report[11], 0x07);
 
-        // Check HAT (1, -1) = up-right = 1
-        assert_eq!(report[16], 0x01);
+        // Check HAT (1, -1) = up-right = 1, plus BTN_TRIGGER (0x10)
+        assert_eq!(report[16], 0x11); // HAT=0x01 | BTN_TRIGGER=0x10
 
-        // Check buttons (BTN_TRIGGER in first nibble, BTN_BASE5 in byte 17)
-        assert_eq!(report[17], 0x41); // 0x01 (trigger) | 0x40 (base5)
+        // Check BTN_BASE5 in byte 17
+        assert_eq!(report[17], 0x40); // BTN_BASE5
     }
 
     #[test]

@@ -172,9 +172,10 @@ outputs: []
 
     #[test]
     fn test_parse_wrong_type() {
+        // YAML will convert numbers to strings, so test with a truly wrong type (array instead of string)
         let yaml = r#"
 inputs:
-  - device: 123
+  - device: ["/dev/input/js0", "/dev/input/js1"]
     name: js0
 
 outputs: []

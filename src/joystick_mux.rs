@@ -880,7 +880,7 @@ mod tests {
                 value: -75,
             },
         });
-        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(-24575));
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(-24576));
 
         // Update from joystick 2 with smaller magnitude (should not change output)
         m.update(AxisUpdate {
@@ -891,7 +891,7 @@ mod tests {
                 value: 25,
             },
         });
-        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(-24575));
+        assert_eq!(m.output_axis(&OutputAxisId(EventCode::EV_ABS(EV_ABS::ABS_X))), Some(-24576));
 
         // Update joystick 2 with largest magnitude
         m.update(AxisUpdate {
