@@ -144,16 +144,17 @@ impl JoystickMux {
         match self.axes.get(axis_id) {
             Some(combine_fn) => match combine_fn {
                 AxisCombineFn::Button { inputs, mode } => {
-                    let pressed = inputs
-                        .iter()
-                        .any(|input| match self.axis_states.get(&input.id) {
-                            Some(event) => match mode {
-                                ButtonMode::NonZero => event.value != 0,
-                                ButtonMode::Positive => event.value > 0,
-                                ButtonMode::Negative => event.value < 0,
-                            },
-                            None => false,
-                        });
+                    let pressed =
+                        inputs
+                            .iter()
+                            .any(|input| match self.axis_states.get(&input.id) {
+                                Some(event) => match mode {
+                                    ButtonMode::NonZero => event.value != 0,
+                                    ButtonMode::Positive => event.value > 0,
+                                    ButtonMode::Negative => event.value < 0,
+                                },
+                                None => false,
+                            });
                     if pressed {
                         Some(1)
                     } else {
