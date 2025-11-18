@@ -295,4 +295,336 @@ mod tests {
         assert_x(-1, 0xff, 0xff);
         assert_x(-1001, 0x17, 0xfc);
     }
+
+    fn assert_y(y: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_Y), y),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, bytea, byteb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_y() {
+        assert_y(0, 0x00, 0x00);
+        assert_y(100, 0x64, 0x00);
+        assert_y(-100, 0x9c, 0xff);
+        assert_y(32767, 0xff, 0x7f);
+        assert_y(-32767, 0x01, 0x80);
+    }
+
+    fn assert_z(z: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_Z), z),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, bytea, byteb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_z() {
+        assert_z(0, 0x00, 0x00);
+        assert_z(256, 0x00, 0x01);
+        assert_z(-256, 0x00, 0xff);
+        assert_z(32767, 0xff, 0x7f);
+        assert_z(-32768, 0x00, 0x80);
+    }
+
+    fn assert_rx(rx: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_RX), rx),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, bytea, byteb, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_rx() {
+        assert_rx(0, 0x00, 0x00);
+        assert_rx(1000, 0xe8, 0x03);
+        assert_rx(-1000, 0x18, 0xfc);
+        assert_rx(32767, 0xff, 0x7f);
+        assert_rx(-32767, 0x01, 0x80);
+    }
+
+    fn assert_ry(ry: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_RY), ry),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, bytea, byteb, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_ry() {
+        assert_ry(0, 0x00, 0x00);
+        assert_ry(5000, 0x88, 0x13);
+        assert_ry(-5000, 0x78, 0xec);
+        assert_ry(32767, 0xff, 0x7f);
+        assert_ry(-32768, 0x00, 0x80);
+    }
+
+    fn assert_rz(rz: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_RZ), rz),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, bytea, byteb, 0x00,
+                0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_rz() {
+        assert_rz(0, 0x00, 0x00);
+        assert_rz(10000, 0x10, 0x27);
+        assert_rz(-10000, 0xf0, 0xd8);
+        assert_rz(32767, 0xff, 0x7f);
+        assert_rz(-32767, 0x01, 0x80);
+    }
+
+    fn assert_slider(slider: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_THROTTLE), slider),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, bytea,
+                byteb, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_slider() {
+        assert_slider(0, 0x00, 0x00);
+        assert_slider(255, 0xff, 0x00);
+        assert_slider(-255, 0x01, 0xff);
+        assert_slider(32767, 0xff, 0x7f);
+        assert_slider(-32768, 0x00, 0x80);
+    }
+
+    fn assert_dial(dial: i64, bytea: u8, byteb: u8) {
+        assert_eq!(
+            make_report(
+                vec! {
+                    (EventCode::EV_ABS(EV_ABS::ABS_RUDDER), dial),
+                }
+                .into_iter()
+            ),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, bytea, byteb, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00
+            ]
+        );
+    }
+
+    #[test]
+    fn test_axes_dial() {
+        assert_dial(0, 0x00, 0x00);
+        assert_dial(1234, 0xd2, 0x04);
+        assert_dial(-1234, 0x2e, 0xfb);
+        assert_dial(32767, 0xff, 0x7f);
+        assert_dial(-32767, 0x01, 0x80);
+    }
+
+    #[test]
+    fn test_all_hat_positions() {
+        // Test all 8 directions + neutral
+        let test_cases = vec![
+            ((0, 0), 0x0f),   // neutral
+            ((0, -1), 0x00),  // up
+            ((1, -1), 0x01),  // up-right
+            ((1, 0), 0x02),   // right
+            ((1, 1), 0x03),   // down-right
+            ((0, 1), 0x04),   // down
+            ((-1, 1), 0x05),  // down-left
+            ((-1, 0), 0x06),  // left
+            ((-1, -1), 0x07), // up-left
+        ];
+
+        for ((x, y), expected_hat) in test_cases {
+            let mut inputs = vec![];
+            if x != 0 {
+                inputs.push((EventCode::EV_ABS(EV_ABS::ABS_HAT0X), x));
+            }
+            if y != 0 {
+                inputs.push((EventCode::EV_ABS(EV_ABS::ABS_HAT0Y), y));
+            }
+
+            let report = make_report(inputs.into_iter());
+            assert_eq!(
+                report[16], expected_hat,
+                "Failed for HAT position ({}, {}): expected {:#04x}, got {:#04x}",
+                x, y, expected_hat, report[16]
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_buttons() {
+        // Test each button individually
+        let button_map = vec![
+            (EV_KEY::BTN_TRIGGER, 0, 0x01),
+            (EV_KEY::BTN_THUMB, 1, 0x02),
+            (EV_KEY::BTN_THUMB2, 2, 0x04),
+            (EV_KEY::BTN_TOP, 3, 0x08),
+            (EV_KEY::BTN_TOP2, 17, 0x01),
+            (EV_KEY::BTN_PINKIE, 17, 0x02),
+            (EV_KEY::BTN_BASE, 17, 0x04),
+            (EV_KEY::BTN_BASE2, 17, 0x08),
+            (EV_KEY::BTN_BASE3, 17, 0x10),
+            (EV_KEY::BTN_BASE4, 17, 0x20),
+            (EV_KEY::BTN_BASE5, 17, 0x40),
+            (EV_KEY::BTN_BASE6, 17, 0x80),
+            (EV_KEY::BTN_TRIGGER_HAPPY1, 18, 0x01),
+            (EV_KEY::BTN_TRIGGER_HAPPY2, 18, 0x02),
+            (EV_KEY::BTN_TRIGGER_HAPPY3, 18, 0x04),
+            (EV_KEY::BTN_TRIGGER_HAPPY4, 18, 0x08),
+            (EV_KEY::BTN_TRIGGER_HAPPY5, 18, 0x10),
+            (EV_KEY::BTN_TRIGGER_HAPPY6, 18, 0x20),
+            (EV_KEY::BTN_TRIGGER_HAPPY7, 18, 0x40),
+            (EV_KEY::BTN_TRIGGER_HAPPY8, 18, 0x80),
+            (EV_KEY::BTN_TRIGGER_HAPPY9, 19, 0x01),
+            (EV_KEY::BTN_TRIGGER_HAPPY10, 19, 0x02),
+            (EV_KEY::BTN_TRIGGER_HAPPY11, 19, 0x04),
+            (EV_KEY::BTN_TRIGGER_HAPPY12, 19, 0x08),
+            (EV_KEY::BTN_TRIGGER_HAPPY13, 19, 0x10),
+            (EV_KEY::BTN_TRIGGER_HAPPY14, 19, 0x20),
+            (EV_KEY::BTN_TRIGGER_HAPPY15, 19, 0x40),
+            (EV_KEY::BTN_TRIGGER_HAPPY16, 19, 0x80),
+            (EV_KEY::BTN_TRIGGER_HAPPY17, 20, 0x01),
+            (EV_KEY::BTN_TRIGGER_HAPPY18, 20, 0x02),
+            (EV_KEY::BTN_TRIGGER_HAPPY19, 20, 0x04),
+            (EV_KEY::BTN_TRIGGER_HAPPY20, 20, 0x08),
+            (EV_KEY::BTN_TRIGGER_HAPPY21, 20, 0x10),
+            (EV_KEY::BTN_TRIGGER_HAPPY22, 20, 0x20),
+            (EV_KEY::BTN_TRIGGER_HAPPY23, 20, 0x40),
+            (EV_KEY::BTN_TRIGGER_HAPPY24, 20, 0x80),
+            (EV_KEY::BTN_TRIGGER_HAPPY25, 21, 0x01),
+            (EV_KEY::BTN_TRIGGER_HAPPY26, 21, 0x02),
+            (EV_KEY::BTN_TRIGGER_HAPPY27, 21, 0x04),
+            (EV_KEY::BTN_TRIGGER_HAPPY28, 21, 0x08),
+            (EV_KEY::BTN_TRIGGER_HAPPY29, 21, 0x10),
+            (EV_KEY::BTN_TRIGGER_HAPPY30, 21, 0x20),
+            (EV_KEY::BTN_TRIGGER_HAPPY31, 21, 0x40),
+            (EV_KEY::BTN_TRIGGER_HAPPY32, 21, 0x80),
+        ];
+
+        for (button, byte_idx, expected_mask) in button_map {
+            let report = make_report(vec![(EventCode::EV_KEY(button), 1)].into_iter());
+            assert_eq!(
+                report[byte_idx], expected_mask,
+                "Failed for button {:?}: expected byte[{}] = {:#04x}, got {:#04x}",
+                button, byte_idx, expected_mask, report[byte_idx]
+            );
+        }
+    }
+
+    #[test]
+    fn test_multiple_buttons_same_byte() {
+        let report = make_report(
+            vec![
+                (EventCode::EV_KEY(EV_KEY::BTN_TRIGGER), 1),
+                (EventCode::EV_KEY(EV_KEY::BTN_THUMB), 1),
+                (EventCode::EV_KEY(EV_KEY::BTN_THUMB2), 1),
+            ]
+            .into_iter(),
+        );
+        // All three buttons should be set in byte 16
+        // 0x01 | 0x02 | 0x04 = 0x07, plus 0x0f for hat = 0x0f (hat in upper nibble)
+        assert_eq!(report[16], 0x0f); // HAT neutral
+        assert_eq!(report[17], 0x07); // Three buttons
+    }
+
+    #[test]
+    fn test_combined_state() {
+        // Test multiple axes and buttons at once
+        let report = make_report(
+            vec![
+                (EventCode::EV_ABS(EV_ABS::ABS_X), 1000),
+                (EventCode::EV_ABS(EV_ABS::ABS_Y), -500),
+                (EventCode::EV_ABS(EV_ABS::ABS_RZ), 2000),
+                (EventCode::EV_ABS(EV_ABS::ABS_HAT0X), 1),
+                (EventCode::EV_ABS(EV_ABS::ABS_HAT0Y), -1),
+                (EventCode::EV_KEY(EV_KEY::BTN_TRIGGER), 1),
+                (EventCode::EV_KEY(EV_KEY::BTN_BASE5), 1),
+            ]
+            .into_iter(),
+        );
+
+        // Check X axis
+        assert_eq!(report[0], 0xe8);
+        assert_eq!(report[1], 0x03);
+
+        // Check Y axis
+        assert_eq!(report[2], 0x0c);
+        assert_eq!(report[3], 0xfe);
+
+        // Check RZ axis
+        assert_eq!(report[10], 0xd0);
+        assert_eq!(report[11], 0x07);
+
+        // Check HAT (1, -1) = up-right = 1
+        assert_eq!(report[16], 0x01);
+
+        // Check buttons (BTN_TRIGGER in first nibble, BTN_BASE5 in byte 17)
+        assert_eq!(report[17], 0x41); // 0x01 (trigger) | 0x40 (base5)
+    }
+
+    #[test]
+    fn test_boundary_values() {
+        // Test i16 min/max values don't cause issues
+        let report = make_report(
+            vec![
+                (EventCode::EV_ABS(EV_ABS::ABS_X), i16::MAX as i64),
+                (EventCode::EV_ABS(EV_ABS::ABS_Y), i16::MIN as i64),
+            ]
+            .into_iter(),
+        );
+
+        // X should be max positive
+        assert_eq!(report[0], 0xff);
+        assert_eq!(report[1], 0x7f);
+
+        // Y should be min negative
+        assert_eq!(report[2], 0x00);
+        assert_eq!(report[3], 0x80);
+    }
 }
